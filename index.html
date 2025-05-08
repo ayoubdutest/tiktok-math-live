@@ -1,0 +1,200 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<script src="/socket.io/socket.io.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jeu de Maths en Live</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f4f4f4;
+            margin: 20px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #666;
+            margin-bottom: 15px;
+        }
+        div {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        #operationDisplay {
+            font-size: 28px;
+            margin: 20px 0;
+            color: #333;
+            font-weight: bold;
+        }
+        .answerBtn {
+            padding: 15px 30px;
+            font-size: 20px;
+            margin: 10px;
+            border: none;
+            border-radius: 8px;
+            background-color: #5cb85c;
+            color: white;
+            cursor: default; /* Désactiver l'interaction manuelle */
+        }
+        #leaderboard {
+            border-collapse: collapse;
+            width: 80%;
+            margin-top: 30px;
+            background-color: white;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        #leaderboard th, #leaderboard td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        #leaderboard th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .gold {
+            color: gold;
+            font-weight: bold;
+        }
+        .silver {
+            color: silver;
+            font-weight: bold;
+        }
+        .bronze {
+            color: #cd7f32;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<h1>................Top du Live.................</h1>
+
+<p>Plus vous participez, plus vous grimpez au classement !</p>
+
+<div>
+    <p id="operationDisplay" style="font-size: 24px; margin: 20px;"></p>
+    <button onclick="switchMode()">Changer Addition/Multiplication</button>
+</div>
+
+<div>
+    <button class="answerBtn" id="btn1"></button>
+    <button class="answerBtn" id="btn2"></button>
+    <button class="answerBtn" id="btn3"></button>
+    <button class="answerBtn" id="btn4"></button>
+</div>
+
+<table id="leaderboard">
+    <thead>
+    <tr><th>Position</th><th>Nom</th><th>Points</th></tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+    let socket;
+    let scores = {};
+
+    document.addEventListener('DOMContentLoaded', () => {
+        socket = io();
+
+        socket.on('connect', () => {
+            console.log('Connecté au serveur Socket.IO');
+        });
+
+        socket.on('newOperation', (data) => {
+            document.getElementById('operationDisplay').innerText = data.operation;
+            data.answers.forEach((ans, i) => {
+                document.getElementById(`btn${i+1}`).innerText = ans;
+            });
+        });
+
+        socket.on('leaderboardUpdate', (leaderboardData) => {
+            const tbody = document.querySelector('#leaderboard tbody');
+            tbody.innerHTML = '';
+            leaderboardData.forEach((entry, index) => {
+                const tr = document.createElement('tr');
+                const positionCell = document.createElement('td');
+                const nameCell = document.createElement('td');
+                const pointsCell = document.createElement('td');
+
+                let posText = index + 1;
+                if (index === 0) posText = '🥇';
+                else if (index === 1) posText = '🥈';
+                else if (index === 2) posText = '🥉';
+
+                positionCell.innerHTML = posText;
+                nameCell.textContent = entry[0];
+                pointsCell.textContent = entry[1];
+
+                nameCell.classList.remove('gold', 'silver', 'bronze');
+                if (index === 0) nameCell.classList.add('gold');
+                if (index === 1) nameCell.classList.add('silver');
+                if (index === 2) nameCell.classList.add('bronze');
+
+                tr.appendChild(positionCell);
+                tr.appendChild(nameCell);
+                tr.appendChild(pointsCell);
+                tbody.appendChild(tr);
+            });
+        });
+
+        socket.on('showResult', (data) => {
+            showPopup(data.message, data.gifUrl, data.name, data.points);
+        });
+
+        window.switchMode = () => {
+            // Envoie une requête au serveur pour changer le mode de l'opération
+            fetch('/switch-mode')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('operationDisplay').innerText = data.operation;
+                    data.answers.forEach((ans, i) => {
+                        document.getElementById(`btn${i+1}`).innerText = ans;
+                    });
+                });
+        };
+    });
+
+    function showPopup(text, gifUrl, playerName, delta) {
+        const popupDiv = document.createElement('div');
+        popupDiv.style.position = 'fixed';
+        popupDiv.style.top = '50%';
+        popupDiv.style.left = '50%';
+        popupDiv.style.transform = 'translate(-50%, -50%)';
+        popupDiv.style.background = '#333';
+        popupDiv.style.border = '3px solid white';
+        popupDiv.style.padding = '20px';
+        popupDiv.style.borderRadius = '12px';
+        popupDiv.style.zIndex = '9999';
+        popupDiv.style.maxWidth = '90%';
+        popupDiv.style.textAlign = 'center';
+
+        const sign = delta > 0 ? '+1' : '-1';
+        const color = delta > 0 ? 'lime' : 'red';
+
+        popupDiv.innerHTML = `
+            <h2 style="color:red; font-weight:bold; margin-bottom:5px;">${playerName} <span style="color:${color};">${sign}</span></h2>
+            <h3 style="color:white; margin-bottom:15px;">${text}</h3>
+            ${gifUrl ? `<img src="${gifUrl}" alt="gif" style="max-width:100%; max-height:200px; display:block; margin:auto;">` : ''}
+            <button onclick="this.parentElement.remove();" style="margin-top:10px;">Fermer</button>
+        `;
+        document.body.appendChild(popupDiv);
+
+        setTimeout(() => {
+            if (popupDiv && popupDiv.parentNode) {
+                popupDiv.remove();
+            }
+        }, 5000);
+    }
+</script>
+
+</body>
+</html>
